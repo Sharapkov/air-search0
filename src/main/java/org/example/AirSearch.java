@@ -18,8 +18,11 @@ public class AirSearch {
         // загрузка данных из файла
         List<Airport> airports = readAirports("src/main/resources/airports.dat");
         // создание kdtree
-        KdTree kdTree = new KdTree(airports);
-
+        KdTree kdTree = new KdTree();
+        for (Airport airport : airports) {
+            double[] point = {airport.getLatitude(), airport.getLongitude()};
+            kdTree.insert(point, airport.getName());
+        }
         // координаты пользователя
         Scanner scanner = new Scanner(System.in);
         System.out.println("Введите широту: ");
@@ -28,16 +31,17 @@ public class AirSearch {
         double lon = scanner.nextDouble();
         Airport target = new Airport("Target Airport",lat,lon);
         // добавление нового узла в дерево
-        List<Airport> airportsWithTarget = new ArrayList<>(airports);
-        airportsWithTarget.add(target);
-        kdTree = new KdTree(airportsWithTarget);
+        //List<Airport> airportsWithTarget = new ArrayList<>(airports);
+        //airportsWithTarget.add(target);
 
         long start = System.currentTimeMillis();
         //поиск 5 ближайших аэропортов к указанным координатам
-        List<Airport> nearestAirports = kdTree.findNearestAirports(target, 5);
+        double[] targetPoint = {target.getLatitude(), target.getLongitude()};
+        List<String> nearestAirports = kdTree.kNearestNeighbors(targetPoint, 5);
         // вывод результатов
-        for (Airport airport : nearestAirports) {
-            System.out.println(airport.getName() + " Координаты: " + airport.getLatitude() + ", " + airport.getLongitude());
+        for (String airportName : nearestAirports) {
+
+            System.out.println(airportName);
         }
         long end = System.currentTimeMillis();
         long totalTime = end - start;

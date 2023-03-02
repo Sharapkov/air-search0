@@ -1,143 +1,108 @@
 package org.example;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
-import java.util.PriorityQueue;
-import java.util.Stack;
+
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 public class KdTree {
     private static final int K = 2;
+
     private Node root;
 
     private static class Node {
-        private Airport airport;
+        private final double[] point;
+        private final String value;
         private Node left;
         private Node right;
-        private int level;
+        private double distance;
 
-        public Node(Airport airport, int level) {
-            this.airport = airport;
-            this.left = null;
-            this.right = null;
-            this.level = level;
-        }
-
-        public double getDistance(Airport target) {
-            if (level % K == 0) {
-                return target.getLongitude() - airport.getLongitude();
-            } else {
-                return target.getLatitude() - airport.getLatitude();
-            }
+        Node(double[] point, String value) {
+            this.point = point;
+            this.value = value;
         }
     }
 
-    public KdTree(List<Airport> airports) {
-        root = buildTree(airports, 0);
+    public void insert(double[] point, String value) {
+        root = insert(root, point, value, 0);
     }
 
-    private void insert(Node node, Node newNode) {
-        double distance = newNode.airport.distanceTo(node.airport);
-        if (distance < 0) {
-            if (node.left == null) {
-                node.left = newNode;
-            } else {
-                insert(node.left, newNode);
-            }
+    private Node insert(Node node, double[] point, String value, int depth) {
+        if (node == null) {
+            return new Node(point, value);
+        }
+
+        int axis = depth % K;
+        if (point[axis] < node.point[axis]) {
+            node.left = insert(node.left, point, value, depth + 1);
         } else {
-            if (node.right == null) {
-                node.right = newNode;
-            } else {
-                insert(node.right, newNode);
-            }
+            node.right = insert(node.right, point, value, depth + 1);
         }
-    }
 
-    private Node buildTree(List<Airport> airports, int level) {
-        if (airports.isEmpty()) {
-            return null;
-        }
-        int medianIndex = airports.size() / 2;
-        Node node = new Node(airports.get(medianIndex), level);
-        List<Airport> leftSubtree = new ArrayList<>(airports.subList(0, medianIndex));
-        List<Airport> rightSubtree = new ArrayList<>(airports.subList(medianIndex + 1, airports.size()));
-        node.left = buildTree(leftSubtree, level + 1);
-        node.right = buildTree(rightSubtree, level + 1);
         return node;
     }
 
-    public List<Airport> findNearestAirports(Airport target, int k) {
-
-        PriorityQueue<Airport> pq = new PriorityQueue<>(k, (a1, a2) -> Double.compare(a2.getDistance(), a1.getDistance()));
-        Stack<Node> stack = new Stack<>();
-        stack.push(root);
-        int depth = 0;
-        while (!stack.isEmpty()) {
-            Node node = stack.pop();
-            if (node == null) {
-                continue;
-            }
-            double distance = node.airport.distanceTo(target);
-            node.airport.setDistance(distance);
-            if (pq.size() < k) {
-                pq.offer(node.airport);
-            } else {
-                Airport farthestAirport = pq.peek();
-                if (distance < farthestAirport.getDistance()) {
-                    pq.poll();
-                    pq.offer(node.airport);
-                }
-            }
-            double planeDistance = node.getDistance(target);
-            if (planeDistance < 0) {
-                stack.push(node.right);
-                if (Math.abs(planeDistance) < pq.peek().getDistance()) {
-                    stack.push(node.left);
-                }
-            } else {
-                stack.push(node.left);
-                if (Math.abs(planeDistance) < pq.peek().getDistance()) {
-                    stack.push(node.right);
-                }
-            }
-            depth++;
-            if (depth >= 1000) {
-                break; // max depth reached
-            }
+    public List<String> kNearestNeighbors(double[] point, int k) {
+        List<Node> nearestNeighbors = new ArrayList<>(k);
+        kNearestNeighbors(root, point, k, 2, nearestNeighbors);
+        List<String> result = new ArrayList<>(k);
+        for (Node node : nearestNeighbors) {
+            result.add(node.value);
         }
-        List<Airport> nearestAirports = new ArrayList<>();
-        while (!pq.isEmpty()) {
-            nearestAirports.add(pq.poll());
-        }
-        return nearestAirports;
-
+        return result;
     }
 
-    private void findNearestAirports(Node node, Airport target, int k, PriorityQueue<Airport> pq) {
+    private void kNearestNeighbors(Node node, double[] point, int k, int depth, List<Node> nearestNeighbors) {
         if (node == null) {
             return;
         }
-        double distance = node.airport.distanceTo(target);
-        node.airport.setDistance(distance);
-        if (pq.size() < k) {
-            pq.offer(node.airport);
+
+        double distance = distance(point, node.point);
+        node.distance = distance;
+
+        if (nearestNeighbors.size() < k) {
+            nearestNeighbors.add(node);
         } else {
-            Airport farthestAirport = pq.peek();
-            if (distance < farthestAirport.getDistance()) {
-                pq.poll();
-                pq.offer(node.airport);
+            Collections.sort(nearestNeighbors, (n1, n2) -> Double.compare(n2.distance, n1.distance));
+            double farthest = nearestNeighbors.get(nearestNeighbors.size() - 1).distance;
+            if (distance < farthest) {
+                nearestNeighbors.remove(nearestNeighbors.size() - 1);
+                nearestNeighbors.add(node);
             }
         }
-        double planeDistance = node.getDistance(target);
-        if (planeDistance < 0) {
-            findNearestAirports(node.left, target, k, pq);
-            if (pq.size() < k || Math.abs(planeDistance) < pq.peek().getDistance()) {
-                findNearestAirports(node.right, target, k, pq);
-            }
+
+        int axis = depth % K;
+        double planeDistance = Math.abs(point[axis] - node.point[axis]);
+
+        if (planeDistance < nearestNeighbors.get(nearestNeighbors.size() - 1).distance || nearestNeighbors.size() < k) {
+            kNearestNeighbors(node.left, point, k, depth + 1, nearestNeighbors);
+            kNearestNeighbors(node.right, point, k, depth + 1, nearestNeighbors);
+        } else if (point[axis] < node.point[axis]) {
+            kNearestNeighbors(node.left, point, k, depth + 1, nearestNeighbors);
         } else {
-            findNearestAirports(node.right, target, k, pq);
-            if (pq.size() < k || Math.abs(planeDistance) < pq.peek().getDistance()) {
-                findNearestAirports(node.left, target, k, pq);
-            }
+            kNearestNeighbors(node.right, point, k, depth + 1, nearestNeighbors);
         }
+    }
+
+    private static double distance(double[] point1, double[] point2) {
+        double radius = 6371;
+        double lat1 = (point1[0]);
+        double lon1 = (point1[1]);
+        double lat2 = (point2[0]);
+        double lon2 = (point2[1]);
+
+        double dlat = Math.toRadians(lat2 - lat1);
+        double dlon = Math.toRadians(lon2 - lon1);
+
+        double a = Math.sin(dlat / 2) * Math.sin(dlat / 2)
+                + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                * Math.sin(dlon / 2) * Math.sin(dlon / 2);
+        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        double distance = radius * c;
+
+        return distance;
     }
 }
